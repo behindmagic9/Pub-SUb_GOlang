@@ -7,12 +7,14 @@ import (
 
 type Broker struct{
 	record map[string][]isubscriber.Isubscriber
+	queue []event.Event
 }
 // var is not used inside the struct
 
 func NewBroker() *Broker{
 	return &Broker{
 		record : make(map[string][]isubscriber.Isubscriber),
+		queue : []event.Event{},
 	}
 }
 
@@ -21,11 +23,20 @@ func (s *Broker) Subscribe(topic string,obs isubscriber.Isubscriber) {
 }
 
 func (s *Broker) Notify(data event.Event) {
-	subscriber := s.record[data.Topic]
-	for _,ob := range subscriber{
-		ob.Update(data)
-	}
+	// push the events into the queue
+	append(s.queue, data)
 }
+
+func (s *Broker) EvaluateEvents(){
+	if(len(s.queue) == 0) {return} 
+	first := s.queue[0]
+	subscriber := s.record[first.Topic]
+		for _,ob := range subscriber{
+		ob.Update(first)
+	}
+	s.queue := s.queue[1:]
+}
+
 
 func (s *Broker) Unsubscribe(topic string, obs isubscriber.Isubscriber){
 	subscribers := s.record[topic]
