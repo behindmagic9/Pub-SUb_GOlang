@@ -2,6 +2,7 @@ package broker
 
 import (
 	"observer/isubscriber"
+	"observer/event"
 )
 
 type Broker struct{
@@ -19,7 +20,7 @@ func (s *Broker) Subscribe(topic string,obs isubscriber.Isubscriber) {
 	s.record[topic] = append(s.record[topic], obs)
 }
 
-func (s *Broker) Notify(name string, data any) {
+func (s *Broker) Notify(name string, data event.Event) {
 	subscriber := s.record[name]
 	for _,ob := range subscriber{
 		ob.Update(name, data)
