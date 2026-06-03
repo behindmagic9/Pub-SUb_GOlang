@@ -4,6 +4,6 @@ import(
 	"observer/event"
 )
 
-type ipublisher interface{
+type Ipublisher interface{
 	Publish(evnt *event.Event)
 }

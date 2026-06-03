@@ -28,6 +28,5 @@ func main(){
 	publisher1.Publish(e1)
 	publisher2.Publish(e2)
 
-	
 	subject.ProcessEvents()
 }

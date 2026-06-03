@@ -6,4 +6,5 @@ import(
 
 type Isubscriber interface {
 	Update(data *event.Event) error;
+	GetID() int
 }

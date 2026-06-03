@@ -21,7 +21,7 @@ const MAX_QUEUE_SIZE =10
 
 type DeliveryFail struct{
 	Event *event.Event
-	SubscriberID isubscriber.Isubscriber
+	Subscriber isubscriber.Isubscriber
 	Retry int
 	Status deliverystatus.DeliveryStatus
 }
@@ -74,21 +74,25 @@ func (s *Broker) evaluateEvents(){
 	if len(s.bufferQueue) > 0 && len(s.queue) < MAX_QUEUE_SIZE/2{
 		s.bufferQue()
 	}
-	
+	allDelivered := true
 	first := s.queue[0]
 	first.Status = deliverystatus.Processing
 	subscriber := s.record[first.Topic]
 	for _,sb := range subscriber{
 		err := sb.Update(first) // as the Update gonna return the err
 		if err != nil{
+			allDelivered = false
 			failure := DeliveryFail{
 				Event : first,
-				SubscriberID : sb,
+				Subscriber : sb,
 				Retry : 1,
 				Status : deliverystatus.Retrying
 			}
 			s.errQueue = append(s.errQueue, &failure)
 		}
+	}
+	if allDelivered == true{
+		first.Status = deliverystatus.Delivered
 	}
 	s.queue = s.queue[1:]
 }
@@ -98,7 +102,7 @@ func (s *Broker) evaluate_Failed_Events(){
 	if(len(s.errQueue) == 0){return}
 	first := s.errQueue[0]
 	s.errQueue = s.errQueue[1:]
-	err := first.SubscriberID.Update(first.Event)
+	err := first.Subscriber.Update(first.Event)
 	if err != nil
 	{
 		first.Retry++
@@ -112,12 +116,15 @@ func (s *Broker) evaluate_Failed_Events(){
 			fmt.Println("droping event as cant be able to process it after multiple retries")
 		}
 	}
+	else {
+		first.Status = deliverystatus.Delivered
+	}
 }
 
 func (s *Broker) Unsubscribe(topic string, subb isubscriber.Isubscriber){
 	subscribers := s.record[topic]
 	for i,sb := range subscribers{
-		if(sb == subb){
+		if(sb.GetID() == subb.GetID()){
 			s.record[topic] = append(subscribers[:i],subscribers[i+1:]...)
 			// appening/joining.. the observers underlying array froms start to previous elment of i and then next element of i to last
 			break

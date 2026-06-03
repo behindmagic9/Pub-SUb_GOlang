@@ -13,7 +13,7 @@ type Publisher struct{
 
 func (p *Publisher) Publish(e *event.Event){
 	e.Status = deliverystatus.Publishing
-	p.broker.Notify(e) // no & needed in the golang in pasing pointer as argument
+	p.broker.Notify(e) // e already is-a pointer
 }
 
 func NewPublisher(pub_name string, brok *broker.Broker) *Publisher{
