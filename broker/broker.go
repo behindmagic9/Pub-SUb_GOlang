@@ -30,7 +30,7 @@ func (s *Broker) Notify(data event.Event) {
 func(s *Broker) ProcessEvents(){
 	if(len(s.queue) == 0) {return} 
 	for(len(s.queue) > 0)
-		EvaluateEvents()
+		evaluate_events()
 }
 
 func evaluate_events(){
