@@ -27,8 +27,13 @@ func (s *Broker) Notify(data event.Event) {
 	append(s.queue, data)
 }
 
-func (s *Broker) EvaluateEvents(){
+func(s *Broker) ProcessEvents(){
 	if(len(s.queue) == 0) {return} 
+	for(len(s.queue) > 0)
+		EvaluateEvents()
+}
+
+func evaluate_events(){
 	first := s.queue[0]
 	subscriber := s.record[first.Topic]
 		for _,ob := range subscriber{
