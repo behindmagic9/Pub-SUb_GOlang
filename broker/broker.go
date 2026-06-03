@@ -11,10 +11,12 @@ type Broker struct{
 	queue []event.Event
 	errQueue []DeliveryFail
 	deadQueue []DeliveryFail
+	bufferQueue []event.Event
 }
 // var is not used inside the struct
 
 const MAX_RETRY int = 4
+const MAX_QUEUE_SIZE =10
 
 type DeliveryFail struct{
 	Event event.Event
@@ -28,6 +30,7 @@ func NewBroker() *Broker{
 		queue : []event.Event{},
 		errQueue : []DeliveryFail{},
 		deadQueue  : []DeliveryFail{},
+		bufferQueue : []event.Event{},
 	}
 }
 
@@ -37,11 +40,15 @@ func (s *Broker) Subscribe(topic string,obs isubscriber.Isubscriber) {
 
 func (s *Broker) Notify(data event.Event) {
 	// push the events into the queue
-	s.queue = append(s.queue, data)
+	if(len(s.queue) >= MAX_QUEUE_SIZE){
+		s.bufferQueue = append(s.bufferQueue, data)
+	}else{
+		s.queue = append(s.queue, data)
+	}
 }
 
 func(s *Broker) ProcessEvents(){
-	if(len(s.queue) == 0) {return} 
+	if(len(s.queue) == 0) {return}
 	for(len(s.queue) > 0){
 		s.evaluateEvents()
 	}
@@ -50,16 +57,26 @@ func(s *Broker) ProcessEvents(){
 	}
 }
 
+func (s *Broker) bufferQue(){
+	for len(s.queue) < MAX_QUEUE_SIZE/2 && len(s.bufferQueue) > 0{
+		s.queue = append(s.queue, s.bufferQueue[0])
+		s.bufferQueue = s.bufferQueue[1:]
+	}
+}
+
 // without adding the recieveer param will act like independent function not like memeber function of Broker
 func (s *Broker) evaluateEvents(){
+	if len(s.bufferQueue) > 0 && len(s.queue) < MAX_QUEUE_SIZE/2{
+		s.bufferQue()
+	}
 	first := s.queue[0]
 	subscriber := s.record[first.Topic]
-	for _,ob := range subscriber{
-		err := ob.Update(first) // as the Update gonna return the err
+	for _,sb := range subscriber{
+		err := sb.Update(first) // as the Update gonna return the err
 		if err != nil{
 			failure := DeliveryFail{
 				Event : first,
-				Subscriber : ob,
+				Subscriber : sb,
 				Retry : 1,
 			}
 			s.errQueue = append(s.errQueue, failure)
@@ -73,13 +90,13 @@ func (s *Broker) evaluate_Failed_Events(){
 	first := s.errQueue[0]
 
 	err := first.Subscriber.Update(first.Event)
-	if err != nil 
+	if err != nil
 	{
 		first.Retry++
 		if first.Retry < MAX_RETRY{
 			// log it cant process them and so dropping
 			s.errQueue = append(s.errQueue, first)
-		}else if  first.Retry >= MAX_RETRY {
+		}else {
 			s.deadQueue = append(s.deadQueue, first)
 			// can later implement logging here by loggin the complete imformation from the Delivery Struct of this
 			fmt.Println("droping event as cant be able to process it after multiple retries")
@@ -88,10 +105,10 @@ func (s *Broker) evaluate_Failed_Events(){
 	s.errQueue = s.errQueue[1:]
 }
 
-func (s *Broker) Unsubscribe(topic string, obs isubscriber.Isubscriber){
+func (s *Broker) Unsubscribe(topic string, subb isubscriber.Isubscriber){
 	subscribers := s.record[topic]
-	for i,ob := range subscribers{
-		if(ob == obs){
+	for i,sb := range subscribers{
+		if(sb == subb){
 			s.record[topic] = append(subscribers[:i],subscribers[i+1:]...)
 			// appening/joining.. the observers underlying array froms start to previous elment of i and then next element of i to last
 			break
