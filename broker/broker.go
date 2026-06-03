@@ -20,10 +20,10 @@ func (s *Broker) Subscribe(topic string,obs isubscriber.Isubscriber) {
 	s.record[topic] = append(s.record[topic], obs)
 }
 
-func (s *Broker) Notify(name string, data event.Event) {
-	subscriber := s.record[name]
+func (s *Broker) Notify(data event.Event) {
+	subscriber := s.record[data.Topic]
 	for _,ob := range subscriber{
-		ob.Update(name, data)
+		ob.Update(data)
 	}
 }
 

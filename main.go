@@ -4,6 +4,7 @@ import(
 	"observer/subscriber"
 	"observer/broker"
 	"observer/event"
+	"observer/publisher"
 )
 
 func main(){
@@ -20,6 +21,10 @@ func main(){
 
 	e2 := event.Event{ "birds", "the bids fled", 21}
 
-	subject.Notify("animal", e1)
-	subject.Notify("birds", e2)	
+	publisher1 := publisher.NewPublisher("pub1", subject)
+
+	publisher2 := publisher.NewPublisher("pub2", subject)
+
+	publisher1.Publish(e1)
+	publisher2.Publish(e2)
 }

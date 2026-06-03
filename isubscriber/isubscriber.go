@@ -5,5 +5,5 @@ import(
 )
 
 type Isubscriber interface {
-	Update(topic string, data event.Event);
+	Update(data event.Event);
 }
