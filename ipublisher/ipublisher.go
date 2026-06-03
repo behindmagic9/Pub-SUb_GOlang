@@ -5,5 +5,5 @@ import(
 )
 
 type ipublisher interface{
-	Publish(event.Event)
+	Publish(evnt *event.Event)
 }

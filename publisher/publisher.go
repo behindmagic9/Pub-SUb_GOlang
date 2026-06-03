@@ -3,6 +3,7 @@ package publisher
 import (
 	"observer/broker"
 	"observer/event"
+	"observer/deliverystatus"
 )
 
 type Publisher struct{
@@ -10,8 +11,9 @@ type Publisher struct{
 	broker *broker.Broker
 }
 
-func (p *Publisher) Publish(e event.Event){
-	p.broker.Notify(e)
+func (p *Publisher) Publish(e *event.Event){
+	e.Status = deliverystatus.Publishing
+	p.broker.Notify(e) // no & needed in the golang in pasing pointer as argument
 }
 
 func NewPublisher(pub_name string, brok *broker.Broker) *Publisher{

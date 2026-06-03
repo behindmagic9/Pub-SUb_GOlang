@@ -5,5 +5,5 @@ import(
 )
 
 type Isubscriber interface {
-	Update(data event.Event);
+	Update(data *event.Event) error;
 }

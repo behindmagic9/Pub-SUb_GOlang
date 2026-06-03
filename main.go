@@ -17,9 +17,9 @@ func main(){
 	subject.Subscribe("birds", obs1)
 	subject.Subscribe("birds", obs2)
 
-	e1 := event.Event{ "animal","the animal run",23}
+	e1 := event.NewEvent("animal","the animal run",23)
 
-	e2 := event.Event{ "birds", "the bids fled", 21}
+	e2 := event.NewEvent("birds", "the bids fled", 21)
 
 	publisher1 := publisher.NewPublisher("pub1", subject)
 
@@ -29,5 +29,5 @@ func main(){
 	publisher2.Publish(e2)
 
 	
-	broker.ProcessEvents()
+	subject.ProcessEvents()
 }
