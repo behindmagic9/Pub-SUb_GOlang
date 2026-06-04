@@ -9,10 +9,11 @@ import (
 
 type Broker struct{
 	record map[string][]isubscriber.Isubscriber
-	queue []*deliverystatus.DeliveryTracker
+	queue []*event.Event
 	errQueue []*deliverystatus.DeliveryTracker
 	deadQueue []*deliverystatus.DeliveryTracker
-	bufferQueue []*deliverystatus.DeliveryTracker
+	bufferQueue []*event.Event
+	metrics deliverystatus.Metrics
 }
 // var is not used inside the struct
 
@@ -22,10 +23,10 @@ const MAX_QUEUE_SIZE =10
 func NewBroker() *Broker{
 	return &Broker{
 		record : make(map[string][]isubscriber.Isubscriber),
-		queue : []*deliverystatus.DeliveryTracker{},
+		queue : []*event.Event{},
 		errQueue : []*deliverystatus.DeliveryTracker{},
 		deadQueue  : []*deliverystatus.DeliveryTracker{},
-		bufferQueue : []*deliverystatus.DeliveryTracker{},
+		bufferQueue : []*event.Event{},
 	}
 }
 
@@ -33,22 +34,23 @@ func (s *Broker) Subscribe(topic string,obs isubscriber.Isubscriber) {
 	s.record[topic] = append(s.record[topic], obs)
 }
 
-func (s *Broker) encapsulate(data *event.Event) *deliverystatus.DeliveryTracker{
+func (s *Broker) encapsulate(data *event.Event, sb isubscriber.Isubscriber) *deliverystatus.DeliveryTracker{
 	return &deliverystatus.DeliveryTracker{
 		Event : data,
-		Subscriber : nil,
-		Retry : 0,
-		Status : deliverystatus.Queued,
+		Subscriber : sb,
+		Retry : 1,
+		Status : deliverystatus.Retrying,
 	}
 }
 
 func (s *Broker) Notify(data *event.Event) {
-	encap := s.encapsulate(data)
 	// push the events into the queue
+	// increment published here
+	s.metrics.Published++
 	if(len(s.queue) >= MAX_QUEUE_SIZE){
-		s.bufferQueue = append(s.bufferQueue, encap)
+		s.bufferQueue = append(s.bufferQueue, data)
 	}else{
-		s.queue = append(s.queue, encap)
+		s.queue = append(s.queue, data)
 	}
 }
 
@@ -74,30 +76,24 @@ func (s *Broker) evaluateEvents(){
 	if len(s.bufferQueue) > 0 && len(s.queue) < MAX_QUEUE_SIZE/2{
 		s.bufferQue()
 	}
-	allDelivered := true
 	first := s.queue[0]
-	first.Status = deliverystatus.Processing
-	subscriber := s.record[first.Event.Topic]
+	subscriber := s.record[first.Topic]
 	for _,sb := range subscriber{
-		err := sb.Update(first.Event) // as the Update gonna return the err
+		err := sb.Update(first) // as the Update gonna return the err
 		if err != nil{
-			allDelivered = false
-			failure := deliverystatus.DeliveryTracker{
-				Event : first.Event,
-				Subscriber : sb,
-				Retry : 1,
-				Status : deliverystatus.Retrying,
-			}
-			s.errQueue = append(s.errQueue, &failure)
+			failure := s.encapsulate(first, sb)
+			// increment faied here
+			s.metrics.Failed++
+			s.errQueue = append(s.errQueue, failure)
+		}else{
+			// increment delivered here
+			s.metrics.Delivered++
 		}
-	}
-	if allDelivered == true{
-		first.Status = deliverystatus.Delivered
 	}
 	s.queue = s.queue[1:]
 }
 
-// without adding the recieveer param will act like independent function not like memeber function of Broker
+// without adding the reciever param will act like independent function not like memeber function of Broker
 func (s *Broker) evaluate_Failed_Events(){
 	if len(s.errQueue) == 0 {return}
 	first := s.errQueue[0]
@@ -107,15 +103,20 @@ func (s *Broker) evaluate_Failed_Events(){
 		first.Retry++
 		if first.Retry < MAX_RETRY{
 			// log it cant process them and so dropping
+			// increment retriied here
+			s.metrics.Retried++
 			s.errQueue = append(s.errQueue, first)
 		}else {
 			first.Status = deliverystatus.DeadLitter
+			// increment dead letter here
+			s.metrics.DeadLitter++
 			s.deadQueue = append(s.deadQueue, first)
 			// can later implement logging here by loggin the complete imformation from the Delivery Struct of this
 			fmt.Println("droping event as cant be able to process it after multiple retries")
 		}
 	}else{
-		first.Status = deliverystatus.Delivered
+		// increment delivered here
+		s.metrics.Delivered++
 	}
 }
 
@@ -128,4 +129,9 @@ func (s *Broker) Unsubscribe(topic string, subb isubscriber.Isubscriber){
 			break
 		}
 	}
+}
+
+
+func (s * Broker) GetMetrics() deliverystatus.Metrics{
+	return &s.metrics
 }

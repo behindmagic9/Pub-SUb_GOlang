@@ -29,4 +29,8 @@ func main(){
 	publisher2.Publish(e2)
 
 	subject.ProcessEvents()
+	
+	metrics := subject.GetMetrics()
+
+	// print metrics now
 }

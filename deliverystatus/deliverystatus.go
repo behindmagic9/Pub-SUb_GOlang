@@ -21,3 +21,12 @@ type DeliveryTracker struct{
 	Retry int
 	Status DeliveryStatus
 }
+
+type Metrics struct{
+	Published int
+	Delivered int
+	DeadLitter int
+	Failed int
+	Retried int
+}
+
