@@ -3,7 +3,6 @@ package subscriber
 import (
 	"fmt"
 	"observer/event"
-	"observer/deliverystatus"
 )
 
 var globalcount = 0
@@ -19,7 +18,7 @@ func NewOb(ob_name string) *Subscriber{
 }
 
 func (s *Subscriber) Update(data *event.Event) error{
-	fmt.Printf("this is the subscriber for this %s and here is the message %s price int is %d \n, status of the event is : %d", data.Topic, data.Message, data.Price, data.Status)
+	fmt.Printf("this is the subscriber for this %s and here is the message %s price int is %d \n", data.Topic, data.Message, data.Price)
 	return nil
 }
 

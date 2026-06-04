@@ -3,7 +3,6 @@ package publisher
 import (
 	"observer/broker"
 	"observer/event"
-	"observer/deliverystatus"
 )
 
 type Publisher struct{
@@ -12,7 +11,6 @@ type Publisher struct{
 }
 
 func (p *Publisher) Publish(e *event.Event){
-	e.Status = deliverystatus.Publishing
 	p.broker.Notify(e) // e already is-a pointer
 }
 

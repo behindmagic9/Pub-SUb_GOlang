@@ -1,9 +1,5 @@
 package event
 
-import(
-	"observer/deliverystatus"
-)
-
 var globalCounter int
 
 type Event struct{
@@ -11,7 +7,6 @@ type Event struct{
 	Topic string
 	Message string
 	Price int
-	Status deliverystatus.DeliveryStatus
 }
 
 func NewEvent(topic string, message string, price int) *Event{
@@ -21,6 +16,5 @@ func NewEvent(topic string, message string, price int) *Event{
 		Topic : topic,
 		Message : message,
 		Price : price,
-		Status : deliverystatus.Initialized,
 	}
 }
