@@ -3,6 +3,7 @@ package deliverystatus
 import(
 	"observer/event"
 	"observer/isubscriber"
+	"sync/atomic"
 )
 
 type DeliveryStatus int
@@ -23,10 +24,10 @@ type DeliveryTracker struct{
 }
 
 type Metrics struct{
-	Published int
-	Delivered int
-	DeadLitter int
-	Failed int
-	Retried int
+	Published atomic.Int64
+	Delivered atomic.Int64
+	DeadLitter atomic.Int64
+	Failed atomic.Int64
+	Retried atomic.Int64
 }
 
