@@ -8,6 +8,7 @@ import(
 	"observer/deliverystatus"
 	"fmt"
 	"time"
+	"sync"
 )
 
 
@@ -20,6 +21,9 @@ func PrintMetrics(metrics *deliverystatus.Metrics) {
 }
 
 func main(){
+
+	var wg sync.WaitGroup
+
 	obs1 := subscriber.NewOb("obs1")
 	obs2 := subscriber.NewOb("obs2")
 
@@ -34,20 +38,26 @@ func main(){
 
 	publisher2 := publisher.NewPublisher("pub2", subject)
 
-	
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		for range 10{
 			publisher1.Publish(event.NewEvent("birds" , "the brid fled",21))
 			publisher2.Publish(event.NewEvent("animal" , "the animal run " , 23))
 		}
 	}()
 
-	go subject.Start()
+	subject.Start() // cant let the start to be run in diff groutine for now cause that be difficult to debug rn 
 	
-	time.Sleep(time.Second)
+	time.Sleep(100*time.millisecond)
+	wg.Wait()
 	subject.Close()
 
 	metrics := subject.GetMetrics()
 	PrintMetrics(metrics)
-	
 }
+
+
+// just remember to close the channel and when the channel are in blocking and nonblocking cause that can be causing the probelm 
+// and confirm before closing channel if any goruotine associated with them is complete can be doneusing waitgroup
+// and use of mutex for locking for read and write end , so that no else can read or write when u are , other alternative for varibale is atomic\

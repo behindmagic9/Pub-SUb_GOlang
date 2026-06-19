@@ -13,12 +13,16 @@ type Broker struct{
 	record map[string][]isubscriber.Isubscriber
 	queue chan *event.Event
 	errQueue chan *deliverystatus.DeliveryTracker
-	deadQueue chan *deliverystatus.DeliveryTracker
+	deadQueue []*deliverystatus.DeliveryTracker
 //	bufferQueue chan *event.Event
 	metrics deliverystatus.Metrics
 	closed atomic.Bool
-	mu sync.Mutex
+	mu sync.RWMutex
+	wg sync.WaitGroup
+	done chan struct{}
 }
+// why we use struct{} cause its just zero memory allocation and can be use to pass the signal only , that we needed right now
+
 // var is not used inside the struct
 
 const MAX_RETRY int = 4
@@ -29,13 +33,16 @@ func NewBroker() *Broker{
 		record : make(map[string][]isubscriber.Isubscriber),
 		queue : make(chan *event.Event, MAX_QUEUE_SIZE),
 		errQueue : make(chan *deliverystatus.DeliveryTracker,MAX_QUEUE_SIZE),
-		deadQueue  : make(chan *deliverystatus.DeliveryTracker, MAX_QUEUE_SIZE),
+		deadQueue  : []*deliverystatus.DeliveryTracker{},
 	//	bufferQueue : []*event.Event{},
 		closed : atomic.Bool{},
+		done : make(chan struct{})
 	}
 }
 
 func (s *Broker) Subscribe(topic string,obs isubscriber.Isubscriber) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.record[topic] = append(s.record[topic], obs)
 }
 
@@ -49,15 +56,30 @@ func (s *Broker) encapsulate(data *event.Event, sb isubscriber.Isubscriber) *del
 }
 
 func (s *Broker) retry() {
-	for ev := range s.errQueue {
+	// reading from the channel
+	defer s.wg.Done()
+	/*
+	if len(s.errQueue) <= 0{ // cause reading a nil channel is again blocking behvaiour
+		return
+	}
+	*/
+	// cant put this len check here cause its again a non-orderd code , so can publish immidetliy in concurrent environment without going through this
+	for ev := range s.errQueue { 
 		s.evaluate_Failed_Events(ev)
 	}
-	close(s.deadQueue)
 }
 
 func (s *Broker) Start() {
+	s.wg.Add(1) // putting the count of adding of number og goroutine outside that start for now
 	go s.retry()
+	s.wg.Add(1)
 	go func() {
+		defer s.wg.Done()
+		// if len (s.queue ) <= 0{ // cause reading a nil channel is again blocking behvaiour
+		// 	return
+		// }
+		// cant put this len check here cause its again a non-orderd code , so can publish immidetliy in concurrent environment without going through this
+		// reading from the channel
 		for ev := range s.queue {
 			s.ProcessEvents(ev)
 		}
@@ -67,14 +89,27 @@ func (s *Broker) Start() {
 
 func (s *Broker) Notify(data *event.Event) {
 	// push the events into the queue
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.closed.Load() {
+	// s.mu.RLock()
+	// defer s.mu.RUnlock()
+	// i cant block this as this is helping in notifying or publishd
+	// publishers too are running in parallel , and its harsh for them , to be get bock here by the lock 
+	if s.closed.Load() { // if close then return , no more publishing
 		return 
 	}
 	// increment published here
 	s.metrics.Published.Add(1)
-	s.queue <- data
+	// here the queue channel also gets full and result in blocking to avoid that have to use the "Select"
+	// as select is reading from both channel and see which ever is ready and write or read it , wihtout blokcing behaviour
+	select{
+		// have to use done cause removed the lock from the notify and that can cause panic as will push event in channel
+		case <-s.done: // if done or signalled from done, that mean closed and just return
+			return
+		case s.queue <- data : 		 // write to channel
+		default :
+			s.metrics.DeadLitter.Add(1)
+			// in future will introduce the buffer which will store the
+			// events there and run it in goroutine in parallel so that it will add them to the main queue 
+	}
 }
 
 func(s *Broker) ProcessEvents(event *event.Event){
@@ -99,14 +134,22 @@ func (s *Broker) evaluateEvents(first *event.Event){
 	}
 	first := s.queue[0]
 	*/
+	s.mu.RLock()
 	subscriber := s.record[first.Topic]
+	s.mu.RUnlock()
 	for _,sb := range subscriber{
 		err := sb.Update(first) // as the Update gonna return the err
 		if err != nil{
 			failure := s.encapsulate(first, sb)
 			// increment faied here
 			s.metrics.Failed.Add(1)
-			s.errQueue<- failure
+			
+			select{
+				case s.errQueue<- failure // write to channel
+				default :
+					s.metrics.DeadLitter.Add(1)	// adding to the deadlitter for now , in future will introduce the buffer which will store the
+					// events there and run it in goroutine in parallel so that it will add them to the main queue 
+			}
 		}else{
 			// increment delivered here
 			s.metrics.Delivered.Add(1)
@@ -128,15 +171,25 @@ func (s *Broker) evaluate_Failed_Events(first *deliverystatus.DeliveryTracker){
 			// log it cant process them and so dropping
 			// increment retriied here
 			s.metrics.Retried.Add(1)
-			s.errQueue<- first
+			// here the err queue channel also gets full and result in blocking to avoid that have to use the "Select"
+			select{
+				case s.errQueue<- first : 		 // write to channel
+				default :
+					s.metrics.DeadLitter.Add(1)	// adding to the deadlitter for now , in future will introduce the buffer which will store the
+					// events there and run it in goroutine in parallel so that it will add them to the main queue 
+			}
 		}else {
 			first.Status = deliverystatus.DeadLitter
 			// increment dead letter here
 			s.metrics.DeadLitter.Add(1)
-			s.deadQueue<- first
-			temp := <- s.deadQueue
+			// removing the dead queue channel cause thats unnecessary , we can put that in queue
+			// s.deadQueue<- first
+			// temp := <- s.deadQueue
+			s.mu.Lock()
+			s.deadQueue = append(s.deadQueue, first)
+			s.mu.Unlock()
 			// can later implement logging here by loggin the complete imformation from the Delivery Struct of this
-			fmt.Printf("droping event as cant be able to process it after multiple retries with Id %d \n" , temp.Event.ID)
+			fmt.Printf("droping event as cant be able to process it after multiple retries with Id %d \n" , first.Event.ID)
 		}
 	}else{
 		// increment delivered here
@@ -145,6 +198,8 @@ func (s *Broker) evaluate_Failed_Events(first *deliverystatus.DeliveryTracker){
 }
 
 func (s *Broker) Unsubscribe(topic string, subb isubscriber.Isubscriber){
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	subscribers := s.record[topic]
 	for i,sb := range subscribers{
 		if(sb.GetID() == subb.GetID()){
@@ -161,11 +216,22 @@ func (s * Broker) GetMetrics() *deliverystatus.Metrics{
 }
 
 func (s *Broker) Close() {
+	// mutex lock so that no two thing can lock it simuntanoeusly
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.closed.Load() {
+	// defer s.mu.Unlock() // can put the defer here cause now the worker will be waiting for the read lock(Rlock) there in evaluate_events and close will wait for workers to Done
+	// instead have to release lock self
+	if s.closed.Load() { // if closed is true , close the cahnnel , that mean if agagin trying to close then return cause already close
+		s.mu.Unlock() // release lock as returning now
 		return
 	}
 	s.closed.Store(true)
-	close(s.queue)
+	// will wait for the this write and will release the lock now
+	//  === Rule of this is  -> never hold mutex while calling Wait() ====
+	s.mu.Unlock()
+	close(s.done)
+	close(s.queue) // will shutdown the main queue first adn then wait for the workers to finish cause thats a timeout signal and they will finsih remian work and we wait for them to get out or finish with Wait()
+	s.wg.Wait()
+	 // wait here for letting all the gorutine number to finsh and return the done as they are running in parallel and wg is tracking there count
+	// why here,because the wait is waiting for everything to be done and return and we cant close the cahnnel or goroutine whihc are processing the cahnnel
+	//  thing otherwise channel close remain calling reading or writing from cahnnel result in deadlock/race condition
 }
