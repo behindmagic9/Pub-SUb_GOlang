@@ -15,9 +15,9 @@ import(
 func PrintMetrics(metrics *deliverystatus.Metrics) {
 	fmt.Printf("Published %d \n", metrics.Published.Load())
 	fmt.Printf("Delivered %d \n", metrics.Delivered.Load())
-	fmt.Printf("DeadLitter %d \n", metrics.DeadLitter.Load())
-	fmt.Printf("Failed %d \n", metrics.Failed.Load())
+	fmt.Printf("DeadLetter %d \n", metrics.DeadLetter.Load())
 	fmt.Printf("Retried %d \n", metrics.Retried.Load())
+	fmt.Printf("Dropped %d \n", metrics.Dropped.Load())
 }
 
 func main(){
@@ -41,7 +41,7 @@ func main(){
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		for range 10{
+		for range 100{
 			publisher1.Publish(event.NewEvent("birds" , "the brid fled",21))
 			publisher2.Publish(event.NewEvent("animal" , "the animal run " , 23))
 		}
@@ -49,7 +49,7 @@ func main(){
 
 	subject.Start() // cant let the start to be run in diff groutine for now cause that be difficult to debug rn 
 	
-	time.Sleep(100*time.millisecond)
+	time.Sleep(100*time.Millisecond)
 	wg.Wait()
 	subject.Close()
 

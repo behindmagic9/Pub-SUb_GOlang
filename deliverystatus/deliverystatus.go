@@ -12,7 +12,7 @@ const (
 	Queued DeliveryStatus = iota
 	Processing
 	Retrying
-	DeadLitter
+	DeadLetter
 	Delivered
 )
 
@@ -26,8 +26,8 @@ type DeliveryTracker struct{
 type Metrics struct{
 	Published atomic.Int64
 	Delivered atomic.Int64
-	DeadLitter atomic.Int64
-	Failed atomic.Int64
+	DeadLetter atomic.Int64
 	Retried atomic.Int64
+	Dropped atomic.Int64
 }
 
