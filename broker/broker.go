@@ -13,7 +13,6 @@ type Broker struct{
 	record map[string][]isubscriber.Isubscriber
 	queue chan *deliverystatus.DeliveryTracker
 	errQueue chan *deliverystatus.DeliveryTracker
-	deadQueue []*deliverystatus.DeliveryTracker
 	//	bufferQueue chan *event.Event
 	metrics deliverystatus.Metrics
 	closed atomic.Bool
@@ -42,8 +41,6 @@ func NewBroker() *Broker{
 		record : make(map[string][]isubscriber.Isubscriber),
 		queue : make(chan *deliverystatus.DeliveryTracker, MAX_QUEUE_SIZE),
 		errQueue : make(chan *deliverystatus.DeliveryTracker,MAX_QUEUE_SIZE),
-		deadQueue  : []*deliverystatus.DeliveryTracker{},
-		//	bufferQueue : []*event.Event{},
 		closed : atomic.Bool{},
 		done : make(chan struct{}),
 		bufferQueue: make(chan *deliverystatus.DeliveryTracker, MAX_BUFFER_SIZE),
@@ -250,9 +247,6 @@ func (s *Broker) evaluateEvents(first *deliverystatus.DeliveryTracker) {
 		s.metrics.Retried.Add(1)
 		if first.Retry >= MAX_RETRY{
 			first.Status = deliverystatus.DeadLetter
-			s.mu.Lock()
-			s.deadQueue = append(s.deadQueue, first)
-			s.mu.Unlock()
 			s.metrics.DeadLetter.Add(1)
 			return
 		}
