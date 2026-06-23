@@ -9,6 +9,7 @@ import(
 	"fmt"
 	"time"
 	"sync"
+	"log"
 )
 
 
@@ -27,33 +28,38 @@ func main(){
 	obs1 := subscriber.NewOb("obs1")
 	obs2 := subscriber.NewOb("obs2")
 
-	subject := broker.NewBroker()
-	subject.Subscribe("animal", obs1)
-	subject.Subscribe("animal", obs2)
-	subject.Subscribe("birds", obs1)
-	subject.Subscribe("birds", obs2)
+	brokr,err := broker.NewBroker()
+	if err != nil{
+		log.Fatal( err)
+		return
+	}
+
+	brokr.Subscribe("animal", obs1)
+	brokr.Subscribe("animal", obs2)
+	brokr.Subscribe("birds", obs1)
+	brokr.Subscribe("birds", obs2)
 
 
-	publisher1 := publisher.NewPublisher("pub1", subject)
+	publisher1 := publisher.NewPublisher("pub1", brokr)
 
-	publisher2 := publisher.NewPublisher("pub2", subject)
+	publisher2 := publisher.NewPublisher("pub2", brokr)
 
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		for range 100{
+		for range 1000{
 			publisher1.Publish(event.NewEvent("birds" , "the brid fled",21))
 			publisher2.Publish(event.NewEvent("animal" , "the animal run " , 23))
 		}
 	}()
 
-	subject.Start() // cant let the start to be run in diff groutine for now cause that be difficult to debug rn 
+	brokr.Start() // cant let the start to be run in diff groutine for now cause that be difficult to debug rn 
 	
 	time.Sleep(100*time.Millisecond)
 	wg.Wait()
-	subject.Close()
+	brokr.Close()
 
-	metrics := subject.GetMetrics()
+	metrics := brokr.GetMetrics()
 	PrintMetrics(metrics)
 }
 

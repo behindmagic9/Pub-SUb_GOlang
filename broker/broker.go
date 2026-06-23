@@ -6,6 +6,7 @@ import (
 	"observer/deliverystatus"
 	"sync"
 	"time"
+	"observer/deadletterlogs"
 	"sync/atomic"
 )
 
@@ -13,6 +14,7 @@ type Broker struct{
 	record map[string][]isubscriber.Isubscriber
 	queue chan *deliverystatus.DeliveryTracker
 	errQueue chan *deliverystatus.DeliveryTracker
+	deadLetterStore deadletterlogs.DeadLetterStore
 	//	bufferQueue chan *event.Event
 	metrics deliverystatus.Metrics
 	closed atomic.Bool
@@ -36,15 +38,20 @@ const MAX_QUEUE_SIZE =100
 const MAX_BUFFER_SIZE =200
 const WORKERS = 5
 
-func NewBroker() *Broker{
+func NewBroker() (*Broker, error){
+	dls,err := deadletterlogs.NewFileDeadLetterStore()
+	if err != nil{
+		return nil, err
+	}
 	return &Broker{
 		record : make(map[string][]isubscriber.Isubscriber),
 		queue : make(chan *deliverystatus.DeliveryTracker, MAX_QUEUE_SIZE),
 		errQueue : make(chan *deliverystatus.DeliveryTracker,MAX_QUEUE_SIZE),
 		closed : atomic.Bool{},
+		deadLetterStore: dls,
 		done : make(chan struct{}),
 		bufferQueue: make(chan *deliverystatus.DeliveryTracker, MAX_BUFFER_SIZE),
-	}
+	},nil
 }
 
 func (s *Broker) Subscribe(topic string,obs isubscriber.Isubscriber) {
@@ -247,7 +254,12 @@ func (s *Broker) evaluateEvents(first *deliverystatus.DeliveryTracker) {
 		s.metrics.Retried.Add(1)
 		if first.Retry >= MAX_RETRY{
 			first.Status = deliverystatus.DeadLetter
-			s.metrics.DeadLetter.Add(1)
+			err := s.deadLetterStore.Save(first)
+			if err !=nil{
+				s.metrics.Dropped.Add(1)
+			}else{
+				s.metrics.DeadLetter.Add(1)
+			}
 			return
 		}
 		select {
@@ -306,6 +318,7 @@ func (s *Broker) Close() {
 		close(s.done)
 		s.wgPub.Wait()
 		s.closeChannel()
+		s.deadLetterStore.CloseFile()
 	})
 	//close(s.queue) // will shutdown the main queue first adn then wait for the workers to finish cause thats a timeout signal and they will finsih remian work and we wait for them to get out or finish with Wait()
 	// wait here for letting all the gorutine number to finsh and return the done as they are running in parallel and wg is tracking there count
