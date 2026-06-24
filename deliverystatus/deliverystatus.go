@@ -1,6 +1,6 @@
 package deliverystatus
 
-import(
+import (
 	"observer/event"
 	"observer/isubscriber"
 	"sync/atomic"
@@ -16,18 +16,17 @@ const (
 	Delivered
 )
 
-type DeliveryTracker struct{
-	Event *event.Event
+type DeliveryTracker struct {
+	Event      *event.Event
 	Subscriber isubscriber.Isubscriber
-	Retry int
-	Status DeliveryStatus
+	Retry      int
+	Status     DeliveryStatus
 }
 
-type Metrics struct{
-	Published atomic.Int64
-	Delivered atomic.Int64
-	DeadLetter atomic.Int64
-	Retried atomic.Int64
-	Dropped atomic.Int64
+type Metrics struct {
+	Published  atomic.Uint64
+	Delivered  atomic.Uint64
+	DeadLetter atomic.Uint64
+	Retried    atomic.Uint64
+	Dropped    atomic.Uint64
 }
-

@@ -1,10 +1,10 @@
 package isubscriber
 
-import(
+import (
 	"observer/event"
 )
 
 type Isubscriber interface {
-	Update(data *event.Event) error;
-	GetID() int
+	Update(data *event.Event) error
+	GetID() int64
 }
