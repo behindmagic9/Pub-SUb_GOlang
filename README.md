@@ -2,6 +2,7 @@
 
 Built this project mainly to understand Go concurrency better and to get hands-on with worker pools, sharding, retries and channel based communication.
 
+Its a Topic based Pub/Sub broker implemented using a producer-consumer architecture internally.
 The broker supports topic based pub/sub, concurrent publishers, retries and a dead letter flow. Internally events are routed to shards using hashing and then processed by worker pools.
 
 ## Things in the project
