@@ -302,12 +302,12 @@ func (s *Broker) evaluateEvents(first *deliverystatus.DeliveryTracker) {
 		if first.Retry >= MAX_RETRY {
 			first.Status = deliverystatus.DeadLetter
 			s.metrics.DeadLetter.Add(1)
-			//err := s.deadLetterStore.Save(first)
-			//if err != nil {
-			//	s.metrics.Dropped.Add(1)
-			//} else {
-			//	s.metrics.DeadLetter.Add(1)
-			//}
+			err := s.deadLetterStore.Save(first)
+			if err != nil {
+				s.metrics.Dropped.Add(1)
+			} else {
+				s.metrics.DeadLetter.Add(1)
+			}
 			s.releaseTracker(first)
 			return
 		}
